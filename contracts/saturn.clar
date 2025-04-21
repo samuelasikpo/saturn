@@ -62,3 +62,55 @@
   { participant: principal }
   { metric: int }
 )
+
+;; Private Helper Functions
+
+;; Check if an item exists in the curation database
+(define-private (item-exists (item-identifier uint))
+  (is-some (map-get? curated-items { item-identifier: item-identifier }))
+)
+
+;; Filter valid items for top content retrieval
+(define-private (not-none (item (optional {
+    originator: principal, 
+    headline: (string-ascii 100), 
+    hyperlink: (string-ascii 200), 
+    topic: (string-ascii 20),
+    publication-epoch: uint, 
+    appraisals: int,
+    gratuities: uint,
+    flags: uint
+  })))
+  (is-some item)
+)
+
+;; Retrieve item if it meets quality threshold (non-negative appraisals)
+(define-private (retrieve-item-if-valid (id uint))
+  (match (map-get? curated-items { item-identifier: id })
+    item (if (>= (get appraisals item) 0) (some item) none)
+    none
+  )
+)
+
+;; Generate a bounded list of sequential numbers
+(define-private (enumerate (n uint))
+  (let ((limit (if (> n u10) u10 n)))
+    (list
+      (if (>= limit u1) u1 u0)
+      (if (>= limit u2) u2 u0)
+      (if (>= limit u3) u3 u0)
+      (if (>= limit u4) u4 u0)
+      (if (>= limit u5) u5 u0)
+      (if (>= limit u6) u6 u0)
+      (if (>= limit u7) u7 u0)
+      (if (>= limit u8) u8 u0)
+      (if (>= limit u9) u9 u0)
+      (if (>= limit u10) u10 u0)
+    )
+  )
+)
+
+;; Filter non-zero values from a list
+(define-private (is-non-zero (n uint))
+  (not (is-eq n u0))
+)

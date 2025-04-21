@@ -114,3 +114,66 @@
 (define-private (is-non-zero (n uint))
   (not (is-eq n u0))
 )
+
+;; Public Content Curation Functions
+
+;; Submit new content for community curation
+(define-public (contribute-item (headline (string-ascii 100)) (hyperlink (string-ascii 200)) (topic (string-ascii 20)))
+  (let
+    (
+      (item-identifier (+ (var-get aggregate-submissions) u1))
+    )
+    (asserts! (and 
+                (>= (len headline) u1)
+                (>= (len hyperlink) MIN_HYPERLINK_LENGTH)
+                (>= (len topic) u1)
+              ) ERR_INVALID_SUBMISSION)
+    (asserts! (> item-identifier (var-get aggregate-submissions)) ERR_OVERFLOW)
+    (asserts! (is-some (index-of (var-get content-topics) topic)) ERR_INVALID_TOPIC)
+    (asserts! (>= (stx-get-balance tx-sender) (var-get submission-charge)) ERR_INADEQUATE_BALANCE)
+    (try! (stx-transfer? (var-get submission-charge) tx-sender PROTOCOL_ADMINISTRATOR))
+    (map-set curated-items
+      { item-identifier: item-identifier }
+      {
+        originator: tx-sender,
+        headline: headline,
+        hyperlink: hyperlink,
+        topic: topic,
+        publication-epoch: stacks-block-height,
+        appraisals: 0,
+        gratuities: u0,
+        flags: u0
+      }
+    )
+    (var-set aggregate-submissions item-identifier)
+    (print { type: "new-item", item-identifier: item-identifier, originator: tx-sender })
+    (ok item-identifier)
+  )
+)
+
+;; Vote on curated content with reputation implications
+(define-public (appraise-item (item-identifier uint) (appraisal int))
+  (let
+    (
+      (previous-appraisal (default-to 0 (get appraisal (map-get? participant-appraisals { participant: tx-sender, item-identifier: item-identifier }))))
+      (target-item (unwrap! (map-get? curated-items { item-identifier: item-identifier }) ERR_NONEXISTENT_ITEM))
+      (appraiser-standing (default-to { metric: 0 } (map-get? participant-credibility { participant: tx-sender })))
+    )
+    (asserts! (item-exists item-identifier) ERR_NONEXISTENT_ITEM)
+    (asserts! (or (is-eq appraisal 1) (is-eq appraisal -1)) ERR_INVALID_APPRAISAL)
+    (map-set participant-appraisals
+      { participant: tx-sender, item-identifier: item-identifier }
+      { appraisal: appraisal }
+    )
+    (map-set curated-items
+      { item-identifier: item-identifier }
+      (merge target-item { appraisals: (+ (get appraisals target-item) (- appraisal previous-appraisal)) })
+    )
+    (map-set participant-credibility
+      { participant: tx-sender }
+      { metric: (+ (get metric appraiser-standing) appraisal) }
+    )
+    (print { type: "appraisal", item-identifier: item-identifier, appraiser: tx-sender, appraisal: appraisal })
+    (ok true)
+  )
+)
